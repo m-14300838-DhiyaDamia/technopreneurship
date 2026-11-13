@@ -215,3 +215,27 @@ table.table { width: 100%; border-collapse: collapse; font-size: .9rem; }
   a { color: inherit; }
   .table-wrap { border: none; overflow: visible; }
 }
+
+/* ---- Responsive header ---------------------------------------------------- */
+@media (max-width: 860px) {
+  .uni-header-inner { flex-wrap: wrap; gap: .6rem; padding: .7rem .9rem; }
+  .uni-logos { width: 100%; justify-content: center; }
+  .uni-logos img { height: 40px; }
+  .uni-title { flex: 1 1 60%; min-width: 0; }
+  .uni-title .main { font-size: .95rem; }
+  .uni-title .sub { font-size: .72rem; }
+  .uni-user { flex: 1 1 auto; text-align: right; }
+}
+@media (max-width: 520px) {
+  html { font-size: 14px; }
+  .uni-title { flex-basis: 100%; }
+  .uni-user { width: 100%; justify-content: space-between; text-align: left; }
+  .app-main { padding: .9rem .75rem 1.5rem; }
+  .page-head { flex-direction: column; align-items: stretch; }
+  .page-head .row, .page-head select { width: 100%; }
+  .modal { padding: .9rem; }
+  .doc { padding: 1.1rem .9rem; }
+  .doc-header { flex-wrap: wrap; justify-content: center; }
+  .exam-footer { position: static; }
+  .stat .value { font-size: 1.4rem; }
+}

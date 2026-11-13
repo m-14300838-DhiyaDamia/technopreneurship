@@ -9,7 +9,7 @@
     "dev": "node --watch src/index.js",
     "seed:demo": "node src/demo/seed.js",
     "sheets:setup": "node scripts/setup-sheets.js",
-    "test": "node --test tests/*.test.js"
+    "test": "node --test \"tests/*.test.js\""
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
