@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+# Environment and secrets — NEVER commit these
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+service-account*.json
+credentials*.json
+# Local data store (development only)
+server/data-local/
+# Build output
+client/dist/
+dist/
+# Logs
+*.log
+logs/
+# Test artifacts
+test-results/
+playwright-report/
+.playwright/
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

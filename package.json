@@ -1,0 +1,22 @@
+{
+  "name": "technopreneurship-final-assessment",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Technopreneurship Final Assessment Management System - Diploma Teknologi Maklumat (DAT), JTM, Pusat Pengajian Diploma, UTHM",
+  "license": "UNLICENSED",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "install:all": "npm install && npm --prefix server install && npm --prefix client install",
+    "dev": "concurrently -n server,client -c blue,green \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
+    "build": "npm --prefix client run build",
+    "start": "npm --prefix server start",
+    "seed:demo": "npm --prefix server run seed:demo",
+    "sheets:setup": "npm --prefix server run sheets:setup",
+    "test": "npm --prefix server test",
+    "test:e2e": "node tests/e2e/run.mjs",
+    "lint": "echo 'no linter configured'"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
