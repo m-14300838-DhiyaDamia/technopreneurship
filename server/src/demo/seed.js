@@ -37,7 +37,7 @@ export async function seedDemo(store, { withAnswers = true, log = console.log } 
     const group = await createGroup({ group_name: g.group_name, business_name: g.business_name, business_idea: g.business_idea });
     const members = [];
     for (const m of g.members) {
-      const { student } = await createStudent({ matric_no: m.matric_no, name: m.name, email: '', section: 'DEMO', group_id: group.group_id, component: m.component, password });
+      const { student } = await createStudent({ matric_no: m.matric_no, name: m.name, email: '', section: 'DEMO', group_id: group.group_id, component: m.component, password, must_change_password: false });
       members.push(student);
     }
     groups.push({ def: g, group, members });

@@ -46,7 +46,7 @@ function findByMatric(matric) {
  * Create a student profile and the matching login account (username = matric number).
  * Returns { student, initialPassword } — the password is shown once to the lecturer.
  */
-export async function createStudent({ matric_no, name, email, section, group_id, component, password }) {
+export async function createStudent({ matric_no, name, email, section, group_id, component, password, must_change_password = true }) {
   const store = getStore();
   matric_no = sanitizePlain(matric_no).toUpperCase();
   name = sanitizePlain(name);
@@ -59,7 +59,7 @@ export async function createStudent({ matric_no, name, email, section, group_id,
     course_code: config.course.code, section: sanitizePlain(section), active: true,
   });
   const initialPassword = password || generatePassword();
-  await createUser({ username: matric_no, password: initialPassword, role: 'student', name, email, student_id: student.student_id });
+  await createUser({ username: matric_no, password: initialPassword, role: 'student', name, email, student_id: student.student_id, must_change_password });
   if (group_id) await syncGroupMembers(group_id);
   return { student: getStudent(student.student_id), initialPassword };
 }

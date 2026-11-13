@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { config } from '../config.js';
 import { nowIso } from '../lib/ids.js';
+import { getStore } from '../data/index.js';
 import { QUESTION_TYPES, QUESTION_TYPE_LABELS, PROCTORING_EVENT_TYPES, DEFAULT_COMPONENTS, DEFAULT_PROPOSAL_TEMPLATE, COMMON_SECTION } from '../services/templates.js';
 
 const router = Router();
@@ -18,7 +19,8 @@ router.get('/', (_req, res) => {
     data_store: config.dataStore,
     ice_servers: config.monitoring.iceServers.map((s) => (config.monitoring.turnUsername && String(s.urls).startsWith('turn')
       ? { ...s, username: config.monitoring.turnUsername, credential: config.monitoring.turnCredential } : s)),
-    monitoring_retention_days: config.monitoring.retentionDays,
+    monitoring_retention_days: Number(getStore().get('Settings', 'monitoring_retention_days')?.value) || config.monitoring.retentionDays,
+    privacy_notice: getStore().get('Settings', 'privacy_notice')?.value || '',
   });
 });
 

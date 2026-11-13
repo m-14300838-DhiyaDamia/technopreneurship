@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="120" viewBox="0 0 240 120" role="img" aria-label="UTHM logo placeholder">
+  <rect x="1" y="1" width="238" height="118" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 4"/>
+  <text x="120" y="52" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" fill="#1e3a5f">UTHM</text>
+  <text x="120" y="78" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#64748b">LOGO PLACEHOLDER</text>
+  <text x="120" y="98" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#94a3b8">replace with official uthm-logo.png</text>
+</svg>

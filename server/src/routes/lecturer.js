@@ -174,7 +174,7 @@ router.post('/assessments/:id/proposals/:group_id/generate', validate(z.object({
 router.put('/assessments/:id/proposals/:group_id/sections/:key', validate(z.object({ html: z.string().max(60000).nullable() })), wrap(async (req, res) => {
   res.json({ proposal: await proposals.editSection(req.params.group_id, req.params.id, req.params.key, req.body.html, req.user) });
 }));
-router.post('/assessments/:id/proposals/:group_id/status', validate(z.object({ status: z.enum(['reviewed', 'finalised', 'exported', 'reopen']), notes: z.string().max(10000).optional() })), wrap(async (req, res) => {
+router.post('/assessments/:id/proposals/:group_id/status', validate(z.object({ status: z.enum(['reviewed', 'finalised', 'exported', 'reopen', 'notes']), notes: z.string().max(10000).optional() })), wrap(async (req, res) => {
   res.json({ proposal: await proposals.setProposalStatus(req.params.group_id, req.params.id, req.body.status, req.user, req.body.notes) });
 }));
 

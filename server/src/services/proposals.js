@@ -206,6 +206,8 @@ export async function setProposalStatus(group_id, assessment_id, status, actor, 
       patch.status = 'exported'; break;
     case 'reopen':
       patch.status = computedStatus('draft', contrib.complete); patch.finalised_by = ''; patch.finalised_at = ''; break;
+    case 'notes':
+      break; // notes only
     default:
       throw badRequest('Unsupported status change');
   }

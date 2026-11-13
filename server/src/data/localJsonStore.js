@@ -16,7 +16,7 @@ export class LocalJsonStore extends BaseStore {
     this.debounceMs = debounceMs;
     this.dirty = new Set();
     this.timer = null;
-    this.writing = null;
+    this.chain = Promise.resolve(); // serialises disk writes
   }
 
   file(table) {
@@ -43,8 +43,13 @@ export class LocalJsonStore extends BaseStore {
     if (this.timer) return;
     this.timer = setTimeout(() => {
       this.timer = null;
-      this.writing = this.writeDirty();
+      this.enqueueWrite();
     }, this.debounceMs);
+  }
+
+  enqueueWrite() {
+    this.chain = this.chain.then(() => this.writeDirty()).catch((err) => logger.error('Local store write failed:', err.message));
+    return this.chain;
   }
 
   async writeDirty() {
@@ -68,10 +73,9 @@ export class LocalJsonStore extends BaseStore {
     if (this.timer) {
       clearTimeout(this.timer);
       this.timer = null;
-      this.writing = this.writeDirty();
     }
-    if (this.writing) await this.writing;
-    if (this.dirty.size) await this.writeDirty();
+    if (this.dirty.size) this.enqueueWrite();
+    await this.chain;
   }
 
   async close() {
