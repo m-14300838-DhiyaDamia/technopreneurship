@@ -23,6 +23,7 @@ let failures = 0;
 const ok = (c, m) => { console.log(`${c ? 'PASS' : 'FAIL'} ${m}`); if (!c) failures++; };
 
 if (!fs.existsSync(path.join(root, 'client/dist/index.html'))) { console.log('Building client…'); execSync('npm --prefix client run build', { cwd: root, stdio: 'inherit' }); }
+try { await fetch(`${BASE}/api/health`); console.error(`Port ${PORT} is already in use. Stop the other server first.`); process.exit(1); } catch { /* port free */ }
 fs.rmSync(dataDir, { recursive: true, force: true });
 execSync('node src/demo/seed.js', { cwd: path.join(root, 'server'), env, stdio: 'ignore' });
 const server = spawn('node', ['src/index.js'], { cwd: path.join(root, 'server'), env, stdio: 'ignore' });
