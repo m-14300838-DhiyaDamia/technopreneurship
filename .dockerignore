@@ -1,0 +1,9 @@
+node_modules
+*/node_modules
+.env
+.env.*
+server/data-local
+server/data-e2e
+test-results
+client/dist
+.git

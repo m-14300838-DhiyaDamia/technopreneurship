@@ -13,6 +13,7 @@
     "seed:demo": "npm --prefix server run seed:demo",
     "sheets:setup": "npm --prefix server run sheets:setup",
     "test": "npm --prefix server test",
+    "test:all": "npm test && npm run test:e2e",
     "test:e2e": "node tests/e2e/run.mjs",
     "lint": "echo 'no linter configured'"
   },

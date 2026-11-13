@@ -1,0 +1,22 @@
+# Render.com blueprint (optional). Set the secret environment variables in the Render dashboard.
+services:
+  - type: web
+    name: technopreneurship-assessment
+    runtime: node
+    buildCommand: npm run install:all && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATA_STORE
+        value: sheets
+      - key: JWT_SECRET
+        sync: false
+      - key: GOOGLE_SHEET_ID
+        sync: false
+      - key: GOOGLE_SERVICE_ACCOUNT_EMAIL
+        sync: false
+      - key: GOOGLE_PRIVATE_KEY
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false

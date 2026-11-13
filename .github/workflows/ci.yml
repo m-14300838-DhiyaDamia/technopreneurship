@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm run install:all
+      - name: Server tests (no Google credentials needed)
+        run: npm test
+      - name: Build client
+        run: npm run build
+      - name: Secret scan (fail if a private key or .env is committed)
+        run: |
+          if git ls-files | grep -E '(^|/)\.env$|service-account.*\.json|\.pem$'; then echo "Secret-looking file is tracked"; exit 1; fi
+          if git grep -n "BEGIN PRIVATE KEY" -- . ':!*.md' ':!.github/workflows/ci.yml'; then echo "Private key committed"; exit 1; fi
