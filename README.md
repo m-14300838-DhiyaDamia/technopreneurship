@@ -6,6 +6,10 @@ A secure web application for the DAT Technopreneurship final assessment. Student
 
 > This software is developed by Dr. Rosfuzah Roslan for teaching use. It is **not** an official UTHM system and makes no claim of institutional endorsement. Replace the placeholder logos with official artwork only with the institution's permission (see section 4).
 
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/m-14300838-DhiyaDamia/technopreneurship?quickstart=1)
+
+**Fastest way to try it (runs on GitHub, nothing to install):** click the badge above, or open the repository → **Code** → **Codespaces** → **Create codespace on main**. After one to two minutes the web application opens in a new browser tab. Sign in with `lecturer` / `Demo@2026`. See [section 8a](#8a-running-on-github-codespaces).
+
 ---
 
 ## Contents
@@ -203,6 +207,20 @@ npm start
 Open <http://localhost:4000>.
 
 To reseed the demo store from scratch: `npm --prefix server run seed:demo -- --reset` (deletes all data in the configured store).
+
+## 8a. Running on GitHub (Codespaces)
+
+GitHub Codespaces runs the whole system (backend and frontend) on GitHub's servers inside your browser. The repository contains a `.devcontainer` configuration, so everything is automatic:
+
+1. Open the repository on GitHub → **Code** → **Codespaces** → **Create codespace on main** (or click the badge at the top of this README).
+2. Wait for the editor to appear. Dependencies are installed and the DEMO data is seeded automatically; the application then starts in the terminal and a browser tab opens with the web application. If the tab does not open, click the **Ports** tab at the bottom and open port **5173** ("Web application").
+3. Sign in with `lecturer` / `Demo@2026` (students: `DEMO-A001` … `DEMO-C003`).
+
+To let other people (for example students in a trial run) open the same address, go to the **Ports** tab, right-click port 5173 → **Port Visibility** → **Public**. The address stays private by default.
+
+To use Google Sheets inside Codespaces without creating a `.env` file: on GitHub go to **Settings → Codespaces → Secrets → New secret** and add `DATA_STORE` = `sheets`, `JWT_SECRET`, `GOOGLE_SHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_EMAIL` and `GOOGLE_PRIVATE_KEY` (paste the key exactly as in the JSON file), each with access to this repository. Restart the codespace afterwards.
+
+Limits to know: a codespace stops after 30 minutes without activity (changeable up to 4 hours in GitHub settings), the free plan has a monthly hours quota, and the address changes if you create a new codespace. It is excellent for trying, demonstrating and configuring the system. For a real graded assessment with a whole class, deploy the backend to a permanent host (section 11) so the address is stable and the server never sleeps mid-assessment.
 
 ## 9. Testing
 

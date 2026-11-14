@@ -8,6 +8,9 @@ export default defineConfig({
   base: process.env.VITE_BASE_PATH || '/',
   server: {
     port: 5173,
+    host: true,
+    // GitHub Codespaces forwards the port over HTTPS on port 443.
+    hmr: process.env.CODESPACES ? { clientPort: 443 } : undefined,
     proxy: {
       '/api': { target: process.env.VITE_DEV_API || 'http://localhost:4000', changeOrigin: true },
       '/socket.io': { target: process.env.VITE_DEV_API || 'http://localhost:4000', ws: true, changeOrigin: true },
