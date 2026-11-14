@@ -106,6 +106,7 @@ export const TABLE_NAMES = Object.keys(TABLES);
 export function coerceIn(table, column, value) {
   const type = TABLES[table].types[column];
   if (value === undefined || value === null) return type === 'boolean' ? false : type === 'json' ? null : '';
+  if (value instanceof Date) return value.toISOString(); // a sheet cell auto-converted to a date
   const s = typeof value === 'string' ? value : String(value);
   switch (type) {
     case 'boolean':

@@ -1,0 +1,7 @@
+{
+  "_comment": "Runtime configuration for the web application. For the GitHub Pages + Google Apps Script edition, paste your Apps Script Web App URL (ends with /exec) into apiUrl and commit this file. Leave apiUrl empty when the Node server hosts the application.",
+  "apiUrl": "",
+  "autosaveMs": 0,
+  "heartbeatMs": 0,
+  "pollMs": 0
+}

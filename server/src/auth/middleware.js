@@ -1,5 +1,4 @@
-import { verifyToken } from './jwt.js';
-import { getStore } from '../data/index.js';
+import { resolveUser } from './session.js';
 import { unauthorized, forbidden } from '../lib/errors.js';
 
 export const ROLES = ['student', 'lecturer', 'admin'];
@@ -10,23 +9,8 @@ export function extractToken(req) {
   return null;
 }
 
-/** Resolve the current user from the token; attaches req.user (fresh from the store). */
 export function requireAuth(req, _res, next) {
-  try {
-    const token = extractToken(req);
-    if (!token) throw unauthorized();
-    const payload = verifyToken(token);
-    const user = getStore().get('Users', payload.sub);
-    if (!user || !user.active) throw unauthorized('Your account is not active');
-    req.user = {
-      user_id: user.user_id, role: user.role, name: user.name, username: user.username,
-      student_id: user.student_id || null, email: user.email,
-    };
-    next();
-  } catch (err) {
-    if (err.status) return next(err);
-    next(unauthorized('Your session has expired. Please login again.'));
-  }
+  try { req.user = resolveUser(extractToken(req)); next(); } catch (err) { next(err.status ? err : unauthorized()); }
 }
 
 export function requireRole(...roles) {
@@ -37,5 +21,4 @@ export function requireRole(...roles) {
   };
 }
 
-/** Lecturers and administrators share most management screens. */
 export const requireStaff = requireRole('lecturer', 'admin');

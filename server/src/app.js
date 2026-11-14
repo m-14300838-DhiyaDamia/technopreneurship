@@ -6,11 +6,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config } from './config.js';
 import { logger } from './lib/logger.js';
-import authRoutes from './routes/auth.js';
-import metaRoutes from './routes/meta.js';
-import studentRoutes from './routes/student.js';
-import lecturerRoutes from './routes/lecturer.js';
-import adminRoutes from './routes/admin.js';
+import { routes } from './api/routes.js';
+import { mountRoutes } from './api/express.js';
 
 export function createApp() {
   const app = express();
@@ -40,12 +37,7 @@ export function createApp() {
   app.use('/api', rateLimit({ windowMs: 60 * 1000, limit: config.isTest ? 100000 : 600, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many requests. Please slow down.' } }));
   app.use('/api', (req, _res, next) => { if (!req.is('json') && ['POST', 'PUT', 'PATCH'].includes(req.method) && req.headers['content-length'] > 0) return next({ status: 415, message: 'Requests must be JSON' }); next(); });
 
-  app.get('/api/health', (_req, res) => res.json({ ok: true, time: new Date().toISOString() }));
-  app.use('/api/meta', metaRoutes);
-  app.use('/api/auth', authRoutes);
-  app.use('/api/student', studentRoutes);
-  app.use('/api/lecturer', lecturerRoutes);
-  app.use('/api/admin', adminRoutes);
+  mountRoutes(app, routes);
   app.use('/api', (_req, res) => res.status(404).json({ error: 'API route not found' }));
 
   // Serve the built frontend when present (single-host deployment).

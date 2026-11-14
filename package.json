@@ -4,7 +4,9 @@
   "private": true,
   "description": "Technopreneurship Final Assessment Management System - Diploma Teknologi Maklumat (DAT), JTM, Pusat Pengajian Diploma, UTHM",
   "license": "UNLICENSED",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "install:all": "npm install && npm --prefix server install && npm --prefix client install",
     "dev": "concurrently -n server,client -c blue,green \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
@@ -13,11 +15,15 @@
     "seed:demo": "npm --prefix server run seed:demo",
     "sheets:setup": "npm --prefix server run sheets:setup",
     "test": "npm --prefix server test",
-    "test:all": "npm test && npm run test:e2e",
+    "test:all": "npm test && npm run test:apps-script && npm run test:e2e && npm run test:e2e:pages",
     "test:e2e": "node tests/e2e/run.mjs",
-    "lint": "echo 'no linter configured'"
+    "lint": "echo 'no linter configured'",
+    "build:apps-script": "node apps-script/build.mjs",
+    "test:apps-script": "node apps-script/build.mjs && node --test apps-script/test/apps.test.js",
+    "test:e2e:pages": "node tests/e2e/apps-script-mode.mjs"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "concurrently": "^9.1.2",
+    "esbuild": "^0.24.2"
   }
 }

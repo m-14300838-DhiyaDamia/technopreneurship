@@ -13,3 +13,15 @@
 | Data store | Google Sheets with cache and batched writes | Single server instance; Google quotas (~300 write requests/minute per project); 50,000 characters per cell; not transactional. | For very large cohorts, a database (PostgreSQL/SQLite) adapter implementing the same store interface. |
 | Google Sheets manual edits | Server refreshes its cache periodically | Manual edits to rows with pending writes can be overwritten. | Edit through the application while it is running. |
 | Password recovery | Lecturer/admin resets passwords | No email-based self-service reset. | An SMTP/email provider and a reset-token flow. |
+
+## Apps Script edition specifics
+
+| Topic | Detail |
+|---|---|
+| No realtime channel | Apps Script cannot hold WebSocket connections. Live monitoring polls every 15 s; the lecturer live camera view is disabled and only camera status is shown. |
+| Latency | Each call takes roughly 1–2 s (Google redirect + script start + sheet read). Auto-save waits 6 s after typing stops and batches changed answers. |
+| Quotas | About 30 simultaneous executions and a daily total execution time (90 minutes for consumer accounts, more for Workspace). A class of 30–40 students saving every few seconds fits; larger cohorts should use the Node edition or run in sessions. |
+| Locking | Writes are serialised with `LockService` (28 s wait). Under heavy load a save can be refused with "server is busy" and the client retries automatically. |
+| Password hashing | PBKDF2-style HMAC-SHA256 with 3,000 iterations (bcrypt is unavailable). Hashes are not interchangeable with the Node edition. |
+| Updating | A new application version requires pasting the regenerated `Code.gs` and creating a new deployment version. |
+| HTTP status codes | Apps Script always answers 200; the real status is inside the JSON envelope, which the client understands. |

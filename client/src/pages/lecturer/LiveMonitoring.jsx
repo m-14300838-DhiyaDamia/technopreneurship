@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { get, patch } from '../../api/client.js';
+import { get, patch, runtime } from '../../api/client.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { useSocket } from '../../hooks/useSocket.js';
 import { Alert, Badge, Empty, ErrorBox, Modal, Spinner, Tabs, useAsync, useToast } from '../../components/ui.jsx';
@@ -16,11 +16,11 @@ export default function LiveMonitoring() {
   const [view, setView] = useState('table');
   const [camStudent, setCamStudent] = useState(null);
   const [filter, setFilter] = useState('');
-  const { socketRef, connected } = useSocket(true);
+  const { socketRef, connected, realtime } = useSocket(true);
   const [, setTick] = useState(0);
 
   useEffect(() => { const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, []);
-  useEffect(() => { const t = setInterval(() => mon.reload(), 30000); return () => clearInterval(t); }, [mon.reload]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { const t = setInterval(() => mon.reload(), runtime.pollMs); return () => clearInterval(t); }, [mon.reload]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const s = socketRef.current; if (!s) return undefined;
@@ -35,9 +35,11 @@ export default function LiveMonitoring() {
   const rows = useMemo(() => {
     if (!mon.data) return [];
     const q = filter.toLowerCase();
-    return mon.data.students.map((s) => ({ ...s, live: presence[s.student_id] })).filter((s) => !q || s.name.toLowerCase().includes(q) || (s.group_name || '').toLowerCase().includes(q))
+    // Without a realtime server, presence is derived from the heartbeat stored on the attempt.
+    const derived = (s) => (realtime ? undefined : { online: s.attempt_status === 'in_progress' && s.last_activity_at && Date.now() - Date.parse(s.last_activity_at) < 90000, camera_status: s.camera_status, state: 'answering', last_seen: s.last_activity_at });
+    return mon.data.students.map((s) => ({ ...s, live: presence[s.student_id] || derived(s) })).filter((s) => !q || s.name.toLowerCase().includes(q) || (s.group_name || '').toLowerCase().includes(q))
       .sort((a, b) => Number(b.attempt_status === 'in_progress') - Number(a.attempt_status === 'in_progress') || (a.group_name || '').localeCompare(b.group_name || ''));
-  }, [mon.data, presence, filter]);
+  }, [mon.data, presence, filter, realtime]);
 
   if (assessments.loading) return <Spinner />;
   if (assessments.error) return <ErrorBox error={assessments.error} retry={assessments.reload} />;
@@ -47,7 +49,7 @@ export default function LiveMonitoring() {
 
   return (
     <>
-      <div className="page-head"><div><h1>Live assessment monitoring</h1><p>{active} student(s) currently answering · Socket {connected ? <Badge tone="ok">connected</Badge> : <Badge tone="bad">reconnecting</Badge>}</p></div>
+      <div className="page-head"><div><h1>Live assessment monitoring</h1><p>{active} student(s) currently answering · {realtime ? <>Live updates {connected ? <Badge tone="ok">connected</Badge> : <Badge tone="bad">reconnecting</Badge>}</> : <Badge tone="info">Refreshes every {Math.round(runtime.pollMs / 1000)} s</Badge>}</p></div>
         <div className="row">
           <select value={aid} onChange={(e) => setAssessmentId(e.target.value)} aria-label="Assessment">{assessments.data.assessments.map((a) => <option key={a.assessment_id} value={a.assessment_id}>{a.title}</option>)}</select>
           <input type="search" placeholder="Filter by name or group" value={filter} onChange={(e) => setFilter(e.target.value)} />
@@ -59,11 +61,11 @@ export default function LiveMonitoring() {
         <>
           {view === 'table' && (
             <div className="table-wrap"><table className="table"><thead><tr><th>Student</th><th>Matric</th><th>Group</th><th>Business</th><th>Connection</th><th>Camera</th><th>Assessment status</th><th>Time remaining</th><th>Last activity</th><th>Flags</th><th></th></tr></thead>
-              <tbody>{rows.map((s) => <Row key={s.student_id} s={s} onCamera={() => setCamStudent(s)} />)}</tbody></table></div>
+              <tbody>{rows.map((s) => <Row key={s.student_id} s={s} realtime={realtime} onCamera={() => setCamStudent(s)} />)}</tbody></table></div>
           )}
           {view === 'grid' && (
             <div className="mon-grid">{rows.filter((r) => r.attempt_status === 'in_progress' || r.live?.online).map((s) => (
-              <div key={s.student_id} className="mon-card" onClick={() => setCamStudent(s)} role="button" tabIndex={0}>
+              <div key={s.student_id} className="mon-card" onClick={() => realtime && setCamStudent(s)} role="button" tabIndex={0} title={realtime ? 'Open live camera view' : 'Camera status only in this edition'}>
                 <div className="row between"><span className="name">{s.name}</span><span className={`dot ${s.live?.online ? 'live' : 'off'}`} /></div>
                 <div className="meta">{s.group_name} · {s.component}</div>
                 <div className="row mt-sm"><CamBadge status={s.live?.camera_status || s.camera_status} /><Badge status={s.attempt_status} /></div>
@@ -80,7 +82,7 @@ export default function LiveMonitoring() {
   );
 }
 
-function Row({ s, onCamera }) {
+function Row({ s, realtime, onCamera }) {
   const remaining = s.attempt_status === 'in_progress' && s.deadline_at ? Math.max(0, (Date.parse(s.deadline_at) - Date.now()) / 1000) : null;
   return (
     <tr>
@@ -91,7 +93,7 @@ function Row({ s, onCamera }) {
       <td className="mono">{remaining !== null ? fmtDuration(remaining) : '—'}</td>
       <td className="small muted">{timeAgo(s.live?.last_seen || s.last_activity_at)}</td>
       <td>{s.flags ? <Badge tone="warn">{s.flags} flag{s.flags > 1 ? 's' : ''}</Badge> : <span className="muted">0 flags</span>}</td>
-      <td className="actions"><button className="btn sm" onClick={onCamera} disabled={!s.live?.online}>View camera</button> {s.attempt_id && <Link className="btn sm ghost" to={`/lecturer/marking/${s.attempt_id}`}>Answers</Link>}</td>
+      <td className="actions"><button className="btn sm" onClick={onCamera} disabled={!realtime || !s.live?.online} title={realtime ? '' : 'Live camera view needs the Node realtime server; this edition shows camera status only'}>View camera</button> {s.attempt_id && <Link className="btn sm ghost" to={`/lecturer/marking/${s.attempt_id}`}>Answers</Link>}</td>
     </tr>
   );
 }

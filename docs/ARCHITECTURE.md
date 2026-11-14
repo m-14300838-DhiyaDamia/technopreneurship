@@ -41,6 +41,14 @@
 └── .github/workflows/ci.yml     tests + build + secret scan on every push
 ```
 
+## Two editions from one codebase
+
+The services, validation schemas and the route table in `server/src/api/routes.js` are shared.
+
+* **Node edition** – `server/src/api/express.js` mounts the route table on Express; `server/src/realtime` adds Socket.IO; the data store is `sheetsStore.js` (service account) or `localJsonStore.js`.
+* **Apps Script edition** – `apps-script/build.mjs` bundles `apps-script/src/main.js` + the shared code with esbuild into `apps-script/Code.gs`. Platform pieces are swapped by the bundler: `apps-script/shims/store.js` (SpreadsheetApp-backed store, loads a worksheet on first use per request and writes immediately), `config.js` (Script Properties), `bcryptjs.js` (PBKDF2-style hashing), `jsonwebtoken.js` (HMAC tokens), `sanitize-html.js` (allow-list sanitiser), `crypto.js`, `logger.js`. The bundler also strips `async`/`await` from the shared modules because Apps Script's `doPost` must return synchronously and every awaited operation is synchronous in that environment. Mutating requests are serialised with `LockService`. The client selects the transport from `client/public/config.json`: when `apiUrl` is set, every call becomes a `POST { method, path, body, token }` to the Web App and the HTTP status is read from the JSON envelope. Pages that used Socket.IO fall back to polling (`runtime.pollMs`) and presence is derived from heartbeats stored on the attempt.
+* `apps-script/test/` runs the generated `Code.gs` inside a simulated Apps Script environment (Node `vm` + fake `SpreadsheetApp`, `Utilities`, `LockService`, `PropertiesService`, `ContentService`) so the bundle is tested before it is pasted into a Sheet.
+
 ## Request flow
 
 1. The browser loads the React app (served by Express from `client/dist`, or by Vite in development).

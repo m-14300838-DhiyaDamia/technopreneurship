@@ -245,16 +245,18 @@ export async function reopenAttempt(attempt_id, actor, { extra_minutes, reason }
   return updated;
 }
 
-/** Presence/heartbeat from the student client (persisted with throttling). */
-const lastPersist = new Map();
+/**
+ * Presence/heartbeat from the student client. Writes are throttled using the
+ * stored last_activity_at (stateless, so it also works in Apps Script where every
+ * request is a fresh execution).
+ */
 export async function recordActivity(student, assessment_id, { camera_status } = {}) {
   const attempt = findAttempt(assessment_id, student.student_id);
   if (!attempt || attempt.status !== 'in_progress') return attempt;
   const cam = camera_status ? sanitizePlain(camera_status).slice(0, 40) : attempt.camera_status;
-  const last = lastPersist.get(attempt.attempt_id) || 0;
   const changed = cam !== attempt.camera_status;
-  if (!changed && Date.now() - last < 45000) return attempt; // throttle writes
-  lastPersist.set(attempt.attempt_id, Date.now());
+  const last = attempt.last_activity_at ? Date.parse(attempt.last_activity_at) : 0;
+  if (!changed && Date.now() - last < 40000) return attempt; // throttle writes
   const updated = await getStore().update('Attempts', attempt.attempt_id, { last_activity_at: nowIso(), camera_status: cam });
   emit(updated, 'activity');
   return updated;

@@ -19,6 +19,10 @@ jobs:
         run: npm test
       - name: Build client
         run: npm run build
+      - name: Build and test the Google Apps Script edition (simulated)
+        run: npm run test:apps-script
+      - name: Check the committed Code.gs is up to date
+        run: git diff --stat --exit-code -- apps-script/Code.gs || (echo "apps-script/Code.gs is stale: run npm run build:apps-script and commit" && exit 1)
       - name: Secret scan (fail if a private key or .env is committed)
         run: |
           if git ls-files | grep -E '(^|/)\.env$|service-account.*\.json|\.pem$'; then echo "Secret-looking file is tracked"; exit 1; fi

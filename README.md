@@ -8,6 +8,13 @@ A secure web application for the DAT Technopreneurship final assessment. Student
 
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/m-14300838-DhiyaDamia/technopreneurship?quickstart=1)
 
+**Two ways to run it, same code, same screens:**
+
+| Edition | Backend | Cost / control | Best for |
+|---|---|---|---|
+| **A. GitHub Pages + Google Apps Script** | A script inside your own Google Sheet (Extensions → Apps Script) | Free. Everything stays in your Google and GitHub accounts. No server to rent or ask the campus for. | Real assessments where you cannot host a server. Live monitoring refreshes every 15 s; no live camera video (camera *status* only). See [section 8b](#8b-running-on-github-pages--google-apps-script-no-server). |
+| **B. Node server** | `server/` on Render, Codespaces, Docker or a campus server | Needs a host that runs Node.js | Full realtime monitoring and the one-to-one live camera view. |
+
 **Fastest way to try it (runs on GitHub, nothing to install):** click the badge above, or open the repository → **Code** → **Codespaces** → **Create codespace on main**. After one to two minutes the web application opens in a new browser tab. Sign in with `lecturer` / `Demo@2026`. See [section 8a](#8a-running-on-github-codespaces).
 
 ---
@@ -222,11 +229,75 @@ To use Google Sheets inside Codespaces without creating a `.env` file: on GitHub
 
 Limits to know: a codespace stops after 30 minutes without activity (changeable up to 4 hours in GitHub settings), the free plan has a monthly hours quota, and the address changes if you create a new codespace. It is excellent for trying, demonstrating and configuring the system. For a real graded assessment with a whole class, deploy the backend to a permanent host (section 11) so the address is stable and the server never sleeps mid-assessment.
 
+## 8b. Running on GitHub Pages + Google Apps Script (no server)
+
+This edition needs **no server at all**. The web application is published by GitHub Pages and talks to a small program (Apps Script) that lives inside your own Google Sheet. The Google credentials problem disappears: the script runs as *you*, so no service account, no Google Cloud project and no secret key are needed, and nothing secret is ever placed in GitHub.
+
+```
+Students / Lecturer (browser)
+        │
+        ▼
+GitHub Pages  ─ static web application (client/, built automatically by a GitHub Action)
+        │   JSON over HTTPS
+        ▼
+Google Apps Script Web App  ─ apps-script/Code.gs pasted into your Google Sheet
+        │
+        ▼
+Your Google Sheet  ─ the twelve worksheets (created automatically)
+```
+
+### Step 1 — Prepare the Google Sheet (10 minutes, once)
+
+1. Create a new Google Sheet at <https://sheets.new>. Name it, for example, `Technopreneurship Assessment 2026`.
+2. In the Sheet, open **Extensions → Apps Script**. A new tab opens with a file called `Code.gs` containing an empty `myFunction`.
+3. Delete that content. Open the file [`apps-script/Code.gs`](apps-script/Code.gs) from this repository on GitHub, click **Raw**, select all, copy, and paste it into the Apps Script editor. Click the **Save** icon.
+4. In the Apps Script editor, open **Project Settings** (gear icon) and tick **Show "appsscript.json" manifest file in editor**. Go back to the editor, open `appsscript.json`, replace its content with the content of [`apps-script/appsscript.json`](apps-script/appsscript.json) and save.
+5. Back in `Code.gs`, choose **setup** in the function dropdown next to the **Run** button and click **Run**. Google asks for permission the first time: click **Review permissions**, choose your account, click **Advanced → Go to … (unsafe)** (it is your own script) and **Allow**.
+6. Open the **Execution log** at the bottom. It shows the twelve worksheets created and the first administrator account, for example:
+   `username: admin   password: Admin-1a2b3c4d`. Write the password down; you will change it at first login.
+   *(To try the system with the fictional DEMO data instead, run **seedDemoData** on an empty sheet. Password for all demo accounts: `Demo@2026`.)*
+7. Click **Deploy → New deployment**. Click the gear next to *Select type* and choose **Web app**. Set **Description** to anything, **Execute as: Me**, **Who has access: Anyone**. Click **Deploy** and copy the **Web app URL** (it ends with `/exec`).
+
+Keep the Sheet private. "Anyone" above means anyone with the URL can call the API, which still requires a username and password; the Sheet itself is never shared.
+
+### Step 2 — Publish the web application on GitHub Pages (5 minutes, once)
+
+1. In your GitHub repository, open the file `client/public/config.json`, click the pencil (**Edit**), paste the Web app URL into `"apiUrl"` so it reads for example `"apiUrl": "https://script.google.com/macros/s/AKfy…/exec"`, and click **Commit changes**.
+2. Open the **Actions** tab. The workflow **Deploy frontend to GitHub Pages** runs automatically (about two minutes). The first run also switches Pages on for the repository.
+3. When it is green, open **Settings → Pages**; the address is shown at the top, for example `https://m-14300838-dhiyadamia.github.io/technopreneurship/`. That is the link you give to students.
+
+If the Actions tab says Pages is not enabled, open **Settings → Pages → Build and deployment → Source** and choose **GitHub Actions**, then re-run the workflow.
+
+### Step 3 — Use it
+
+Open the Pages address, sign in as `admin`, change the password, create a lecturer account (*Administration → Users*), then follow sections 13 to 20 as usual: assessment, questions, students, groups, open the assessment, monitor, mark, generate proposals, print.
+
+### Updating this edition later
+
+* **New version of the application**: pull the latest code into your repository (or merge the update); GitHub Pages redeploys automatically. If `apps-script/Code.gs` changed, paste the new content into the Apps Script editor, save, then **Deploy → Manage deployments → Edit (pencil) → Version: New version → Deploy**. The URL stays the same.
+* **Course name, semester, retention days** for this edition are set in the Apps Script editor under **Project Settings → Script Properties** (keys `COURSE_CODE`, `COURSE_NAME`, `ASSESSMENT_TITLE`, `SEMESTER`, `INSTITUTION_NAME`, `DEPARTMENT_NAME`, `CENTRE_NAME`, `PROGRAMME_NAME`, `MONITORING_RETENTION_DAYS`, `CAMERA_REQUIRED_DEFAULT`).
+
+### What is different in this edition
+
+| Feature | GitHub Pages + Apps Script | Node server |
+|---|---|---|
+| Login, answers, auto-save, submission, server-side timer, marking, feedback, proposals, reports, printing, audit log | Yes | Yes |
+| Auto-save interval | Every 6 s after typing stops (Apps Script needs about 1–2 s per save) | 2 s |
+| Live monitoring page | Refreshes every 15 s; "LIVE" means a heartbeat was received in the last 90 s | Instant |
+| Monitoring events (tab switch, paste, camera status…) | Yes, delivered within seconds | Yes, instant |
+| Lecturer live camera view (WebRTC) | **Not available** (needs a realtime server). Camera status is shown. | Yes |
+| Password hashing | PBKDF2-style (HMAC-SHA256, salted, iterated) | bcrypt |
+| Capacity | Suitable for a class (about 30–40 students at a time). Apps Script allows roughly 30 simultaneous calls and about 90 minutes of total script time per day, so very large cohorts should use the Node edition or split sessions. | Limited by the host |
+
+Both editions use exactly the same worksheets, so a Sheet created by one can be read by the other, except that passwords created in one edition cannot be verified by the other (reset them).
+
 ## 9. Testing
 
 ```bash
 npm test          # server tests: authentication, permissions, saving, timer expiry, marking, proposals, reports, Google Sheets adapter (with a fake Sheets API), sanitisation
 npm run test:e2e  # browser test with Chromium (Playwright): student login → camera → answer → auto-save → monitoring → camera view → submit → marking → proposal → reports → results
+npm run test:apps-script  # builds apps-script/Code.gs and runs it inside a simulated Apps Script environment (worksheets, login, saving, timer, marking, proposals)
+npm run test:e2e:pages    # browser test of the GitHub Pages + Apps Script edition against the simulated script
 ```
 
 The end-to-end test starts its own server on port 4300 with a temporary local store and writes screenshots to `test-results/`. It needs the `playwright` package and a Chromium browser (`npx playwright install chromium` once, if not already present).
@@ -268,7 +339,7 @@ Summary of what lives where:
 | Source code | GitHub | No |
 | Assessment data | Google Sheets (private spreadsheet) | No (data only) |
 | Backend / API / WebSocket | A Node.js host (Render, Railway, Fly.io, campus server, Docker) | **Yes** – Google credentials and `JWT_SECRET` are set as environment variables on the host |
-| Frontend | Served by the backend (recommended) **or** GitHub Pages (static only) | No |
+| Frontend | Served by the backend (Node edition) **or** GitHub Pages (Apps Script edition, section 8b) | No |
 
 **Recommended: one Node service.**
 
@@ -276,7 +347,9 @@ Summary of what lives where:
 * *Docker*: `docker build -t tfa .` then `docker run -p 4000:4000 --env-file .env tfa`.
 * *Campus server*: install Node, clone the repository, create `.env`, `npm run install:all && npm run build`, then run `npm start` under a process manager such as `pm2` behind HTTPS (nginx/Caddy). HTTPS is required for camera access in browsers.
 
-**Optional: frontend on GitHub Pages.** GitHub Pages can host the static files in `client/dist`, but it cannot run the API or keep Google credentials safe, so the backend must still be deployed elsewhere. Build with `VITE_API_BASE_URL=https://your-backend.example.com VITE_BASE_PATH=/<repository>/ npm run build`, publish `client/dist`, and set `CORS_ORIGIN=https://<account>.github.io` on the backend. Deep links need a `404.html` copy of `index.html`.
+**No-server alternative.** If you cannot host a Node service, use the GitHub Pages + Google Apps Script edition described in section 8b: Pages hosts the static files and the Apps Script inside your Google Sheet is the backend. GitHub Pages by itself cannot run an API or keep Google credentials safe, which is why the script lives in Google, not in the repository.
+
+**Optional: frontend on GitHub Pages with the Node backend elsewhere.** GitHub Pages can host the static files in `client/dist` while the Node API runs on another host. Build with `VITE_API_BASE_URL=https://your-backend.example.com VITE_BASE_PATH=/<repository>/ npm run build`, publish `client/dist`, and set `CORS_ORIGIN=https://<account>.github.io` on the backend. Deep links need a `404.html` copy of `index.html`.
 
 ## 12. Updating the system from GitHub
 
@@ -396,6 +469,7 @@ Students see a clear notice before the camera is requested, explaining the purpo
 * The live camera view is one student at a time; a multi-camera grid with simultaneous video would need a media server (e.g. an SFU) and considerably more bandwidth. The grid view shows live status cards instead.
 * Page numbers in exported PDFs come from the browser's print headers/footers; server-side PDF generation would require a headless browser on the host.
 * The Google Sheets store caches data in memory in a single server process; run one instance. Sheets cells are limited to 50,000 characters, so answers are capped at 45,000 characters.
+* The Apps Script edition has no realtime channel (no live camera view, monitoring refreshes every 15 s), saves take 1–2 s, and Google's Apps Script quotas limit it to classroom-sized cohorts. The generated `Code.gs` must be re-pasted into the Sheet when the application is updated.
 
 Full detail: [docs/LIMITATIONS.md](docs/LIMITATIONS.md).
 

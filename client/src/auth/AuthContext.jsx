@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { get, post, tokenStore, setUnauthorizedHandler } from '../api/client.js';
+import { get, post, tokenStore, setUnauthorizedHandler, loadRuntimeConfig, runtime } from '../api/client.js';
 
 const AuthContext = createContext(null);
 
@@ -17,7 +17,8 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     setUnauthorizedHandler(() => logout(false));
     (async () => {
-      try { setMeta(await get('/meta')); } catch { /* server may be down; login page will show the error */ }
+      await loadRuntimeConfig();
+      try { setMeta({ ...(await get('/meta')), runtime: { ...runtime } }); } catch { /* server may be down; login page will show the error */ }
       if (tokenStore.get()) {
         try { const { user: u } = await get('/auth/me'); setUser(u); } catch { tokenStore.set(null); }
       }

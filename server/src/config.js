@@ -26,6 +26,8 @@ if (isProd && (!env.JWT_SECRET || env.JWT_SECRET.length < 32 || env.JWT_SECRET.s
 
 export const config = {
   env: env.NODE_ENV || 'development',
+  edition: 'node',
+  realtime: true, // Socket.IO available (false in the Apps Script edition)
   isProd,
   isTest,
   port: num(env.PORT, 4000),

@@ -75,7 +75,7 @@ async function wipe(store) {
   await store.flush();
 }
 
-const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/').split('/').pop());
+const isMain = typeof process !== 'undefined' && process.argv && process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/').split('/').pop());
 if (isMain) {
   const args = new Set(process.argv.slice(2));
   const store = await createStore();

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { get, post, ApiError } from '../../api/client.js';
+import { get, post, ApiError, runtime } from '../../api/client.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
 import { useSocket } from '../../hooks/useSocket.js';
 import { useCamera, useFaceDetection } from '../../hooks/useCamera.js';
@@ -30,6 +30,13 @@ export default function AssessmentPage() {
     } catch (e) { setError(e); return null; }
   }, [assessmentId]);
   useEffect(() => { load(); }, [load]);
+  // Without a realtime server, poll occasionally so a lecturer's "reopen" is noticed.
+  const attemptStatus = ctx?.assessment?.attempt?.status || 'none';
+  useEffect(() => {
+    if (runtime.mode !== 'apps-script' || attemptStatus === 'in_progress') return undefined;
+    const t = setInterval(load, 60000);
+    return () => clearInterval(t);
+  }, [attemptStatus, load]);
 
   if (error) return <ErrorBox error={error} retry={load} />;
   if (!ctx) return <Spinner />;
@@ -147,7 +154,13 @@ function ExamRoom({ ctx, user, meta, offsetMs, reload, toast }) {
   const [viewer, setViewer] = useState(null); // lecturer currently viewing camera
   const timer = useRef(null);
   const saving = useRef(false);
-  const { socketRef, connected } = useSocket(true);
+  const { socketRef, connected, realtime } = useSocket(true);
+  const [netOnline, setNetOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
+  useEffect(() => {
+    const on = () => setNetOnline(true); const off = () => setNetOnline(false);
+    window.addEventListener('online', on); window.addEventListener('offline', off);
+    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
+  }, []);
   const cam = useCamera();
   const videoRef = useRef(null);
   const pcRef = useRef(null);
@@ -215,7 +228,7 @@ function ExamRoom({ ctx, user, meta, offsetMs, reload, toast }) {
         if (r.attempt && r.attempt.status !== 'in_progress') { setLocked(true); setLockReason('This attempt has been submitted.'); setTimeout(reload, 1000); }
       } catch { /* offline: ignore */ }
     };
-    const t = setInterval(beat, 30000);
+    const t = setInterval(beat, runtime.heartbeatMs);
     return () => clearInterval(t);
   }, [a.assessment_id, a.camera_required, cam.status, reload]);
 
@@ -249,7 +262,7 @@ function ExamRoom({ ctx, user, meta, offsetMs, reload, toast }) {
     dirty.current.add(qid);
     setSaveState((s) => ({ ...s, state: 'dirty' }));
     clearTimeout(timer.current);
-    timer.current = setTimeout(flush, AUTOSAVE_MS);
+    timer.current = setTimeout(flush, runtime.autosaveMs || AUTOSAVE_MS);
   };
   useEffect(() => { // retry loop for failed saves / reconnection
     const t = setInterval(() => { if (dirty.current.size && !saving.current) flush(); }, 10000);
@@ -329,7 +342,7 @@ function ExamRoom({ ctx, user, meta, offsetMs, reload, toast }) {
             </>}
           </div>
           <div className="card small">
-            <div className="row between"><span className="label">Connection</span><span><span className={`dot ${connected ? 'live' : 'off'}`} /> {connected ? 'Online' : 'Reconnecting…'}</span></div>
+            <div className="row between"><span className="label">Connection</span><span><span className={`dot ${(realtime ? connected : netOnline) ? 'live' : 'off'}`} /> {realtime ? (connected ? 'Online' : 'Reconnecting…') : (netOnline ? `Online · sync every ${Math.round(runtime.autosaveMs / 1000)}s` : 'Offline')}</span></div>
             <div className="row between mt-sm"><span className="label">Status</span><Badge status={locked ? 'submitted' : 'in_progress'}>{locked ? 'Locked' : 'In progress'}</Badge></div>
           </div>
         </aside>
