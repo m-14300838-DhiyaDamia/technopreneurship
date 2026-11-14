@@ -1,5 +1,5 @@
 {
-  "_comment": "Runtime configuration for the web application. For the GitHub Pages + Google Apps Script edition, paste your Apps Script Web App URL (ends with /exec) into apiUrl and commit this file. Leave apiUrl empty when the Node server hosts the application.",
+  "_comment": "Runtime configuration for the web application. For the GitHub Pages + Google Apps Script edition, paste your Apps Script Web App URL (ends with /exec) into apiUrl and commit this file. Leave apiUrl empty when the Node server hosts the application. Timings are milliseconds; 0 = automatic (Apps Script edition: autosave 6000, heartbeat 20000, poll 15000). For large cohorts (150-250 students at once) use autosaveMs 15000, heartbeatMs 60000, pollMs 30000.",
   "apiUrl": "",
   "autosaveMs": 0,
   "heartbeatMs": 0,

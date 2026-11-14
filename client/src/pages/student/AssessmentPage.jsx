@@ -251,6 +251,7 @@ function ExamRoom({ ctx, user, meta, offsetMs, reload, toast }) {
       setOffset(Date.parse(r.server_time) - Date.now());
     } catch (err) {
       if (err instanceof ApiError && (err.code === 'TIME_EXPIRED' || err.code === 'LOCKED')) { setLocked(true); setLockReason(err.message); setTimeout(reload, 1500); }
+      else if (err.status === 503 || err.status === 429) { setSaveState({ state: 'error', at: null, message: 'Server busy — your answers are kept on this device and will be retried automatically.' }); clearTimeout(timer.current); timer.current = setTimeout(flush, 8000 + Math.random() * 12000); }
       else setSaveState({ state: 'error', at: null, message: err.status === 0 ? 'Offline — answers are kept on this device and will sync when the connection returns.' : err.message });
     } finally { saving.current = false; }
   }, [a.assessment_id, locked, reload]);

@@ -5,7 +5,7 @@
 import crypto from 'node:crypto';
 
 class FakeSheet {
-  constructor(name) { this.name = name; this.rows = []; this.frozen = 0; this.formats = 0; }
+  constructor(name) { this.name = name; this.rows = []; this.frozen = 0; this.formats = 0; this.stats = { rangeReads: 0, bulkReads: 0, writes: 0, finds: 0 }; }
   getName() { return this.name; }
   getLastRow() { return this.rows.length; }
   getMaxRows() { return Math.max(1000, this.rows.length); }
@@ -15,12 +15,19 @@ class FakeSheet {
   getRange(row, col, numRows = 1, numCols = 1) {
     const sheet = this;
     return {
-      getValues() { const out = []; for (let r = 0; r < numRows; r++) { const src = sheet.rows[row - 1 + r] || []; out.push(Array.from({ length: numCols }, (_, c) => (src[col - 1 + c] === undefined ? '' : src[col - 1 + c]))); } return out; },
-      setValues(values) { values.forEach((vals, r) => { const idx = row - 1 + r; while (sheet.rows.length <= idx) sheet.rows.push([]); vals.forEach((v, c) => { sheet.rows[idx][col - 1 + c] = v; }); }); return this; },
+      getValues() { sheet.stats.rangeReads++; if (numRows > 50) sheet.stats.bulkReads++; const out = []; for (let r = 0; r < numRows; r++) { const src = sheet.rows[row - 1 + r] || []; out.push(Array.from({ length: numCols }, (_, c) => (src[col - 1 + c] === undefined ? '' : src[col - 1 + c]))); } return out; },
+      setValues(values) { sheet.stats.writes++; values.forEach((vals, r) => { const idx = row - 1 + r; while (sheet.rows.length <= idx) sheet.rows.push([]); vals.forEach((v, c) => { sheet.rows[idx][col - 1 + c] = v; }); }); return this; },
       setNumberFormat() { sheet.formats++; return this; },
+      createTextFinder(text) {
+        sheet.stats.finds++;
+        const needle = String(text); let entire = false;
+        const scan = () => { const hits = []; for (let r = 0; r < numRows; r++) { const src = sheet.rows[row - 1 + r] || []; for (let c = 0; c < numCols; c++) { const v = src[col - 1 + c]; const sv = v === undefined || v === null ? '' : String(v); if (entire ? sv === needle : sv.includes(needle)) hits.push({ getRow: () => row + r, getColumn: () => col + c, getValue: () => v }); } } return hits; };
+        const finder = { matchEntireCell(b) { entire = b; return finder; }, matchCase() { return finder; }, findAll: scan, findNext() { return scan()[0] || null; } };
+        return finder;
+      },
     };
   }
-  appendRow(values) { this.rows.push(values.slice()); return this; }
+  appendRow(values) { this.stats.writes++; this.rows.push(values.slice()); return this; }
   deleteRow(r) { this.rows.splice(r - 1, 1); return this; }
 }
 

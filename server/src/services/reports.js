@@ -91,19 +91,14 @@ export function dashboardStats(assessment_id) {
 
 /** Flattened per-student status list used by the dashboard table and filters. */
 export function studentStatusList(assessment_id) {
-  const store = getStore();
   const students = listStudents({ active: true });
-  const flagsByStudent = new Map();
-  if (assessment_id) for (const l of store.find('ProctoringLogs', (l) => l.assessment_id === assessment_id && l.severity !== 'info')) {
-    flagsByStudent.set(l.student_id, (flagsByStudent.get(l.student_id) || 0) + 1);
-  }
   return students.map((s) => {
     const t = assessment_id ? findAttempt(assessment_id, s.student_id) : null;
     return {
       student_id: s.student_id, name: s.name, matric_no: s.matric_no, group_id: s.group_id, group_name: s.group_name, business_name: s.business_name, component: s.role,
       attempt_id: t?.attempt_id || null, attempt_status: t?.status || 'not_started', marking_status: t?.marking_status || 'pending', total_marks: t?.total_marks ?? null, max_marks: t?.max_marks ?? null,
       camera_status: t?.camera_status || 'unknown', last_activity_at: t?.last_activity_at || null, submitted_at: t?.submitted_at || null, deadline_at: t?.deadline_at || null,
-      started_at: t?.started_at || null, flags: flagsByStudent.get(s.student_id) || 0,
+      started_at: t?.started_at || null, flags: t?.flags_count || 0,
     };
   });
 }

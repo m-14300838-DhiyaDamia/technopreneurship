@@ -159,6 +159,56 @@ describe('Apps Script edition (simulated)', () => {
     assert.equal(login('lect2', 'Password123').length > 20, true);
   });
 
+  test('scales: a student save reads only its own rows, never the whole Answers sheet', () => {
+    const big = boot();
+    big.sandbox.seedDemoData();
+    const lt = big.call('POST', '/auth/login', { username: 'lecturer', password: 'Demo@2026' }).body.token;
+    const AID = big.call('GET', '/lecturer/assessments', {}, lt).body.assessments[0].assessment_id;
+    const qs = big.call('GET', `/lecturer/assessments/${AID}/questions`, {}, lt).body.questions;
+    // 60 extra groups x 3 students = 180 more students, each answering 3 questions (fills Answers with ~550 rows)
+    const comps = ['Marketing', 'Product Planning', 'Financial Planning'];
+    const tokens = [];
+    for (let g = 0; g < 60; g++) {
+      const grp = big.call('POST', '/lecturer/groups', { group_name: `Load Group ${g}`, business_name: `Biz ${g}` }, lt).body.group;
+      for (let m = 0; m < 3; m++) {
+        const r = big.call('POST', '/lecturer/students', { matric_no: `LOAD-${g}-${m}`, name: `Load Student ${g}-${m}`, group_id: grp.group_id, component: comps[m], password: 'Password123' }, lt);
+        assert.equal(r.status, 201, r.body.error);
+        tokens.push([r.body.student.student_id, comps[m]]);
+      }
+    }
+    const answersSheet = big.gas._sheets.get('Answers');
+    for (const [sid, comp] of tokens) {
+      const u = big.gas._sheets.get('Users').rows.find((r) => r.includes(sid));
+      const tok = big.call('POST', '/auth/login', { username: u[1], password: 'Password123' }).body.token;
+      assert.equal(big.call('POST', `/student/assessments/${AID}/start`, {}, tok).status, 200);
+      const mine = qs.filter((q) => q.section === comp).map((q) => ({ question_id: q.question_id, answer: `<p>${'Answer text. '.repeat(60)}</p>` }));
+      const save = big.call('POST', `/student/assessments/${AID}/answers`, { answers: mine }, tok);
+      assert.equal(save.status, 200, save.body.error);
+    }
+    assert.ok(answersSheet.rows.length > 540, `Answers sheet has ${answersSheet.rows.length} rows`);
+    // Now measure ONE more student's save.
+    const [sid] = tokens[0];
+    const u = big.gas._sheets.get('Users').rows.find((r) => r.includes(sid));
+    const tok = big.call('POST', '/auth/login', { username: u[1], password: 'Password123' }).body.token;
+    const before = { ...answersSheet.stats };
+    const att = big.gas._sheets.get('Attempts'); const attBefore = { ...att.stats };
+    const save = big.call('POST', `/student/assessments/${AID}/answers`, { answers: [{ question_id: qs.find((q) => q.section === 'Marketing').question_id, answer: '<p>Updated</p>' }] }, tok);
+    assert.equal(save.status, 200);
+    assert.equal(answersSheet.stats.bulkReads - before.bulkReads, 0, 'no bulk read of the Answers sheet');
+    assert.ok(answersSheet.stats.rangeReads - before.rangeReads <= 6, `only the student's own answer rows were read (${answersSheet.stats.rangeReads - before.rangeReads} reads)`);
+    assert.equal(att.stats.bulkReads - attBefore.bulkReads, 0, 'no bulk read of the Attempts sheet');
+    assert.equal(answersSheet.stats.writes - before.writes, 1, 'exactly one row written');
+    // A heartbeat soon after a save writes nothing (throttled on last_activity_at).
+    const w = att.stats.writes;
+    big.call('POST', `/student/assessments/${AID}/heartbeat`, { camera_status: 'unknown' }, tok);
+    assert.equal(att.stats.writes, w, 'heartbeat throttled');
+    // Lecturer monitoring over 189 students still works and reads logs tail only.
+    const logs = big.gas._sheets.get('ProctoringLogs'); const lb = { ...logs.stats };
+    const mon = big.call('GET', `/lecturer/assessments/${AID}/monitoring`, {}, lt);
+    assert.equal(mon.status, 200); assert.equal(mon.body.students.length, 189);
+    assert.ok(logs.stats.bulkReads - lb.bulkReads <= 1, 'monitoring reads at most one bounded block of the log sheet');
+  });
+
   test('setup() on a fresh spreadsheet creates admin; second run is idempotent', () => {
     const fresh = boot();
     const msg = fresh.sandbox.setup();

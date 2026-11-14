@@ -44,9 +44,28 @@ function parseRequest(e) {
   return { method, pathname: pathname.replace(/\/+$/, '') || '/', query, body: req.body || {}, token: req.token || '' };
 }
 
+/**
+ * Tell the store which rows this request needs, so large sheets are never read in full
+ * for a single student. See SpreadsheetStore in shims/store.js.
+ */
+function applyScope(store, route, params, query, user) {
+  const p = route.path;
+  if (p.startsWith('/student/')) { store.setScope({ student_id: user.student_id }); return; }
+  if (/^\/lecturer\/attempts\/:id\//.test(p) || p === '/lecturer/reports/individual/:attempt_id') {
+    const attempt = store.fetchById('Attempts', params.id || params.attempt_id);
+    if (attempt) store.setScope({ student_id: attempt.student_id });
+    return;
+  }
+  if (params.group_id && (p.includes('/proposals/:group_id') || p.includes('/reports/group/'))) { store.setScope({ group_id: params.group_id }); return; }
+  if (p === '/lecturer/assessments/:id/monitoring') { store.setScope({}, { ProctoringLogs: 400 }); return; }
+  if (p === '/lecturer/monitoring/events') { if (query.student_id) store.setScope({ student_id: query.student_id }); else store.setScope({}, { ProctoringLogs: Math.min(Number(query.limit) || 500, 2000) }); return; }
+  if (p === '/lecturer/dashboard') { store.setScope({}, { ProctoringLogs: 2000 }); return; }
+  if (p === '/lecturer/audit' || p === '/admin/audit') { store.setScope({}, { AuditLogs: Math.min(Number(query.limit) || 500, 5000) }); }
+}
+
 /** Dispatch one API call. Exported for the test harness. */
 export function handle(req) {
-  createStore(); // every request starts from the live spreadsheet (no stale cache)
+  const store = createStore(); // every request starts from the live spreadsheet (no stale cache)
   const match = matchRoute(routes, req.method, req.pathname);
   if (!match) return { status: 404, body: { error: 'API route not found' } };
   const { route, params } = match;
@@ -54,6 +73,7 @@ export function handle(req) {
     let user = null;
     if (route.auth !== 'none') user = resolveUser(req.token);
     checkAuth(route, user);
+    applyScope(store, route, params, req.query, user);
     const body = validateBody(route, req.body);
     const ctx = { user, params, query: req.query, body, ip: '', audit: (action, entityType, entityId, details) => audit(user, action, entityType, entityId, details, '') };
     const result = route.handler(ctx);
@@ -66,10 +86,17 @@ export function handle(req) {
   }
 }
 
+/** Student writes touch only that student's rows and are serialised by the student's own
+ *  browser, so they run without the global lock. Staff/admin changes take the lock. */
+function needsLock(req) {
+  if (!MUTATING.has(req.method)) return false;
+  return !req.pathname.startsWith('/student/');
+}
+
 export function doPost(e) {
   const req = parseRequest(e);
   if (!req) return json(400, { error: 'Invalid JSON request' });
-  if (MUTATING.has(req.method)) {
+  if (needsLock(req)) {
     const lock = LockService.getScriptLock();
     try { lock.waitLock(28000); } catch { return json(503, { error: 'The server is busy. Please try again in a moment.' }); }
     try { const res = handle(req); return json(res.status, res.body); } finally { lock.releaseLock(); }

@@ -4566,14 +4566,31 @@ var TFA = (() => {
   };
 
   // apps-script/shims/store.js
+  var SCOPE_COLUMNS = {
+    Answers: ["student_id", "group_id", "assessment_id"],
+    Attempts: ["student_id", "attempt_id", "group_id"],
+    ProctoringLogs: ["student_id", "group_id"],
+    BusinessProposals: ["group_id"],
+    GroupReports: ["group_id"]
+  };
+  var APPEND_ONLY = /* @__PURE__ */ new Set(["AuditLogs", "ProctoringLogs"]);
   var SpreadsheetStore = class extends BaseStore {
     constructor(spreadsheet) {
       super();
       this.ss = spreadsheet;
       this.loaded = /* @__PURE__ */ new Set();
+      this.partial = /* @__PURE__ */ new Set();
       this.sheets = {};
       this.headers = {};
       this.rowIndex = {};
+      this.scope = {};
+      this.tail = {};
+      for (const t of Object.keys(TABLES)) this.rowIndex[t] = /* @__PURE__ */ new Map();
+    }
+    /** Request-level hints set by the router before handlers run. */
+    setScope(scope = {}, tail = {}) {
+      this.scope = scope || {};
+      this.tail = tail || {};
     }
     sheet(table) {
       if (this.sheets[table]) return this.sheets[table];
@@ -4587,17 +4604,12 @@ var TFA = (() => {
       this.sheets[table] = sh;
       return sh;
     }
-    /** Create every worksheet with its header row (used by setup()). */
-    ensureAll() {
-      for (const t of Object.keys(TABLES)) this.ensureLoaded(t);
-    }
-    ensureLoaded(table) {
-      this.assertTableName(table);
-      if (this.loaded.has(table)) return;
+    header(table) {
+      if (this.headers[table]) return this.headers[table];
       const sh = this.sheet(table);
       const def = TABLES[table];
-      const values = sh.getLastRow() ? sh.getDataRange().getValues() : [];
-      let header = (values[0] || []).map((h) => String(h || "").trim());
+      const width = Math.max(sh.getLastColumn(), def.columns.length);
+      let header = sh.getRange(1, 1, 1, width).getValues()[0].map((h) => String(h || "").trim());
       const missing = def.columns.filter((c) => !header.includes(c));
       if (!header.filter(Boolean).length || missing.length) {
         header = [...header.filter(Boolean), ...missing];
@@ -4605,22 +4617,54 @@ var TFA = (() => {
         sh.getRange(1, 1, sh.getMaxRows(), header.length).setNumberFormat("@");
       }
       this.headers[table] = header;
-      const idIdx = header.indexOf(def.id);
-      const map = /* @__PURE__ */ new Map();
-      const index = /* @__PURE__ */ new Map();
-      for (let i = 1; i < values.length; i++) {
-        const cells = values[i];
-        const id2 = cells[idIdx];
-        if (id2 === void 0 || id2 === null || id2 === "") continue;
-        map.set(String(id2), rowToObject(table, header, cells));
-        index.set(String(id2), i + 1);
-      }
-      this.cache[table] = map;
-      this.rowIndex[table] = index;
-      this.loaded.add(table);
+      return header;
+    }
+    /** Create every worksheet with its header row (used by setup()). */
+    ensureAll() {
+      for (const t of Object.keys(TABLES)) this.header(t);
     }
     assertTableName(table) {
       if (!TABLES[table]) throw new Error(`Unknown table: ${table}`);
+    }
+    ingest(table, header, cells, rowNumber) {
+      const idIdx = header.indexOf(TABLES[table].id);
+      const id2 = cells[idIdx];
+      if (id2 === void 0 || id2 === null || id2 === "") return;
+      this.cache[table].set(String(id2), rowToObject(table, header, cells));
+      this.rowIndex[table].set(String(id2), rowNumber);
+    }
+    /** Load the rows needed for this request: scoped, tail-only, or everything. */
+    ensureLoaded(table) {
+      this.assertTableName(table);
+      if (this.loaded.has(table) || this.partial.has(table)) return;
+      const sh = this.sheet(table);
+      const header = this.header(table);
+      const lastRow = sh.getLastRow();
+      const scopeCol = (SCOPE_COLUMNS[table] || []).find((c) => this.scope[c] !== void 0 && this.scope[c] !== "");
+      if (scopeCol && lastRow > 1) {
+        const col = header.indexOf(scopeCol) + 1;
+        const finder = sh.getRange(2, col, lastRow - 1, 1).createTextFinder(String(this.scope[scopeCol])).matchEntireCell(true).matchCase(true);
+        const hits = finder.findAll();
+        for (const cell of hits) {
+          const r2 = cell.getRow();
+          this.ingest(table, header, sh.getRange(r2, 1, 1, header.length).getValues()[0], r2);
+        }
+        this.partial.add(table);
+        return;
+      }
+      const n = this.tail[table];
+      if (n && lastRow > 1) {
+        const start = Math.max(2, lastRow - n + 1);
+        const values = sh.getRange(start, 1, lastRow - start + 1, header.length).getValues();
+        values.forEach((cells, i) => this.ingest(table, header, cells, start + i));
+        this.partial.add(table);
+        return;
+      }
+      if (lastRow > 1) {
+        const values = sh.getRange(2, 1, lastRow - 1, header.length).getValues();
+        values.forEach((cells, i) => this.ingest(table, header, cells, i + 2));
+      }
+      this.loaded.add(table);
     }
     // Reads: load lazily.
     list(table) {
@@ -4629,7 +4673,9 @@ var TFA = (() => {
     }
     get(table, id2) {
       this.ensureLoaded(table);
-      return super.get(table, id2);
+      const hit = super.get(table, id2);
+      if (hit || this.loaded.has(table)) return hit;
+      return this.fetchById(table, id2);
     }
     find(table, pred) {
       this.ensureLoaded(table);
@@ -4643,29 +4689,53 @@ var TFA = (() => {
       this.ensureLoaded(table);
       return super.count(table, pred);
     }
-    insert(table, row) {
-      this.ensureLoaded(table);
-      return super.insert(table, row);
-    }
     update(table, id2, patch) {
       this.ensureLoaded(table);
+      if (!this.cache[table].has(String(id2))) this.fetchById(table, id2);
       return super.update(table, id2, patch);
     }
     remove(table, id2) {
       this.ensureLoaded(table);
+      if (!this.cache[table].has(String(id2))) this.fetchById(table, id2);
       return super.remove(table, id2);
+    }
+    insert(table, row) {
+      if (APPEND_ONLY.has(table) && !this.loaded.has(table) && !this.partial.has(table)) {
+        this.header(table);
+        const full = this.normalise(table, row);
+        const idCol = TABLES[table].id;
+        if (!full[idCol]) full[idCol] = `${table === "AuditLogs" ? "alog" : "plog"}_${Date.now().toString(36)}${Utilities.getUuid().replace(/-/g, "").slice(0, 10)}`;
+        this.persistInsert(table, full);
+        return { ...full };
+      }
+      this.ensureLoaded(table);
+      return super.insert(table, row);
+    }
+    /** Find one row by primary key with TextFinder (used when only part of a table is loaded). */
+    fetchById(table, id2) {
+      const sh = this.sheet(table);
+      const header = this.header(table);
+      const lastRow = sh.getLastRow();
+      if (lastRow < 2) return null;
+      const col = header.indexOf(TABLES[table].id) + 1;
+      const hit = sh.getRange(2, col, lastRow - 1, 1).createTextFinder(String(id2)).matchEntireCell(true).matchCase(true).findNext();
+      if (!hit) return null;
+      const r2 = hit.getRow();
+      this.ingest(table, header, sh.getRange(r2, 1, 1, header.length).getValues()[0], r2);
+      const row = this.cache[table].get(String(id2));
+      return row ? { ...row } : null;
     }
     // Writes: immediate.
     persistInsert(table, row) {
       const sh = this.sheet(table);
-      sh.appendRow(objectToRow(table, this.headers[table], row));
+      sh.appendRow(objectToRow(table, this.header(table), row));
       this.rowIndex[table].set(row[TABLES[table].id], sh.getLastRow());
     }
     persistUpdate(table, row) {
       const id2 = row[TABLES[table].id];
       const r2 = this.rowIndex[table].get(id2);
       if (!r2) return this.persistInsert(table, row);
-      const header = this.headers[table];
+      const header = this.header(table);
       this.sheet(table).getRange(r2, 1, 1, header.length).setValues([objectToRow(table, header, row)]);
       return void 0;
     }
@@ -5164,7 +5234,7 @@ var TFA = (() => {
   }
 
   // apps-script/shims/bcryptjs.js
-  var ITERATIONS = 3e3;
+  var ITERATIONS = 2e3;
   var b64 = (bytes) => Utilities.base64Encode(bytes);
   var bytesOf = (s) => Utilities.newBlob(s).getBytes();
   function derive(password, saltB64, iterations) {
@@ -6449,12 +6519,7 @@ var TFA = (() => {
     };
   }
   function studentStatusList(assessment_id) {
-    const store2 = getStore();
     const students = listStudents({ active: true });
-    const flagsByStudent = /* @__PURE__ */ new Map();
-    if (assessment_id) for (const l of store2.find("ProctoringLogs", (l2) => l2.assessment_id === assessment_id && l2.severity !== "info")) {
-      flagsByStudent.set(l.student_id, (flagsByStudent.get(l.student_id) || 0) + 1);
-    }
     return students.map((s) => {
       var _a, _b;
       const t = assessment_id ? findAttempt(assessment_id, s.student_id) : null;
@@ -6476,7 +6541,7 @@ var TFA = (() => {
         submitted_at: (t == null ? void 0 : t.submitted_at) || null,
         deadline_at: (t == null ? void 0 : t.deadline_at) || null,
         started_at: (t == null ? void 0 : t.started_at) || null,
-        flags: flagsByStudent.get(s.student_id) || 0
+        flags: (t == null ? void 0 : t.flags_count) || 0
       };
     });
   }
@@ -6906,8 +6971,40 @@ var TFA = (() => {
     }
     return { method, pathname: pathname.replace(/\/+$/, "") || "/", query, body: req.body || {}, token: req.token || "" };
   }
+  function applyScope(store2, route, params, query, user) {
+    const p = route.path;
+    if (p.startsWith("/student/")) {
+      store2.setScope({ student_id: user.student_id });
+      return;
+    }
+    if (/^\/lecturer\/attempts\/:id\//.test(p) || p === "/lecturer/reports/individual/:attempt_id") {
+      const attempt = store2.fetchById("Attempts", params.id || params.attempt_id);
+      if (attempt) store2.setScope({ student_id: attempt.student_id });
+      return;
+    }
+    if (params.group_id && (p.includes("/proposals/:group_id") || p.includes("/reports/group/"))) {
+      store2.setScope({ group_id: params.group_id });
+      return;
+    }
+    if (p === "/lecturer/assessments/:id/monitoring") {
+      store2.setScope({}, { ProctoringLogs: 400 });
+      return;
+    }
+    if (p === "/lecturer/monitoring/events") {
+      if (query.student_id) store2.setScope({ student_id: query.student_id });
+      else store2.setScope({}, { ProctoringLogs: Math.min(Number(query.limit) || 500, 2e3) });
+      return;
+    }
+    if (p === "/lecturer/dashboard") {
+      store2.setScope({}, { ProctoringLogs: 2e3 });
+      return;
+    }
+    if (p === "/lecturer/audit" || p === "/admin/audit") {
+      store2.setScope({}, { AuditLogs: Math.min(Number(query.limit) || 500, 5e3) });
+    }
+  }
   function handle(req) {
-    createStore();
+    const store2 = createStore();
     const match = matchRoute(routes, req.method, req.pathname);
     if (!match) return { status: 404, body: { error: "API route not found" } };
     const { route, params } = match;
@@ -6915,6 +7012,7 @@ var TFA = (() => {
       let user = null;
       if (route.auth !== "none") user = resolveUser(req.token);
       checkAuth(route, user);
+      applyScope(store2, route, params, req.query, user);
       const body = validateBody(route, req.body);
       const ctx = { user, params, query: req.query, body, ip: "", audit: (action, entityType, entityId, details) => audit(user, action, entityType, entityId, details, "") };
       const result = route.handler(ctx);
@@ -6926,10 +7024,14 @@ var TFA = (() => {
       return { status, body: { error: status >= 500 ? `Internal error: ${err.message}` : err.message, details: err.details, code: err.details && err.details.code } };
     }
   }
+  function needsLock(req) {
+    if (!MUTATING.has(req.method)) return false;
+    return !req.pathname.startsWith("/student/");
+  }
   function doPost(e) {
     const req = parseRequest(e);
     if (!req) return json(400, { error: "Invalid JSON request" });
-    if (MUTATING.has(req.method)) {
+    if (needsLock(req)) {
       const lock = LockService.getScriptLock();
       try {
         lock.waitLock(28e3);

@@ -4,7 +4,7 @@
  * Hashes created by the Node edition (bcrypt "$2a$…") cannot be verified here.
  * Functions return plain values: the bundle strips async/await from the shared code.
  */
-const ITERATIONS = 3000;
+const ITERATIONS = 2000;
 const b64 = (bytes) => Utilities.base64Encode(bytes);
 const bytesOf = (s) => Utilities.newBlob(s).getBytes();
 

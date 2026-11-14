@@ -287,9 +287,26 @@ Open the Pages address, sign in as `admin`, change the password, create a lectur
 | Monitoring events (tab switch, paste, camera status…) | Yes, delivered within seconds | Yes, instant |
 | Lecturer live camera view (WebRTC) | **Not available** (needs a realtime server). Camera status is shown. | Yes |
 | Password hashing | PBKDF2-style (HMAC-SHA256, salted, iterated) | bcrypt |
-| Capacity | Suitable for a class (about 30–40 students at a time). Apps Script allows roughly 30 simultaneous calls and about 90 minutes of total script time per day, so very large cohorts should use the Node edition or split sessions. | Limited by the host |
+| Capacity | Designed for cohorts of up to about 250 students at the same time (see "Capacity" below). | Limited by the host |
 
 Both editions use exactly the same worksheets, so a Sheet created by one can be read by the other, except that passwords created in one edition cannot be verified by the other (reset them).
+
+### Capacity of the Apps Script edition (large cohorts)
+
+The script is written so that a student's request never reads the whole spreadsheet: it looks up only that student's rows (Google's TextFinder), appends log rows without reading the log sheets, and student saves do not take the global lock (each student's browser already sends one request at a time). An automated test fills the Answers sheet with 189 students' answers and verifies that one more save reads only that student's rows and writes exactly one row.
+
+What this means in numbers (Google's documented limits: 30 simultaneous executions per account, about 1–2 s per request):
+
+| Setting for a 3-hour assessment | 30–60 students | 150–250 students |
+|---|---|---|
+| `autosaveMs` in `config.json` | 6000 (default) | **15000** |
+| `heartbeatMs` | 20000 (default) | **60000** |
+| `pollMs` (lecturer monitoring refresh) | 15000 (default) | **30000** |
+| Typical load | under 2 requests/s | about 5–8 requests/s with bursts at start and submit |
+
+With those settings 250 students generate well under the 30-simultaneous-execution ceiling. Answers are kept on the student's device until the server confirms the save, so a slow or refused save (the "Server busy" message) is retried automatically and nothing is lost unless the browser is closed before the next successful sync. Expect saves to take a few seconds, not milliseconds.
+
+Honest caveats: Google does not publish a request-per-second guarantee for Apps Script and may throttle bursts; the start of the assessment (everyone clicking Start within two minutes) and the final submission minute are the busiest moments. Before a real 250-student assessment, run a pilot with one class and ask students to start in two or three waves a few minutes apart. The Node edition (section 11) remains the stronger choice above about 250 concurrent students.
 
 ## 9. Testing
 
